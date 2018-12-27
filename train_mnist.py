@@ -46,20 +46,20 @@ print(net)
 # 这部分将结果写到一个模型定义文件中去，目前准备设计的结构只支持单路径计算，
 # 对卷积不支持pad，不支持stride，非线性层只支持ReLU，Pooling不支持stride，要求长宽均能整除kernel_size
 # 只支持方形的卷积核和降采样核，Pooling支持MAX--0和AVE--1
-with open('layer_params.txt', 'w') as f:
-    # conv写入conv in_channels out_channels kernel_size 0/1(bias)
-    # relu写入relu
-    # pooling写入pooling kernel_size 0/1(max or ave)
-    # fc写入fc in_features out_features 0/1(bias)
-    f.write(f'conv {net.conv1.in_channels} {net.conv1.out_channels} {net.conv1.kernel_size[0]} {int(isinstance(net.conv1.bias, nn.Parameter))}\n')
-    f.write('relu\n')
-    f.write(f'pooling {net.pool1.kernel_size} 0\n')
-    f.write(f'conv {net.conv2.in_channels} {net.conv2.out_channels} {net.conv2.kernel_size[0]} {int(isinstance(net.conv2.bias, nn.Parameter))}\n')
-    f.write('relu\n')
-    f.write(f'pooling {net.pool2.kernel_size} 0\n')
-    f.write(f'fc {net.fc3.in_features} {net.fc3.out_features} {int(isinstance(net.fc3.bias, nn.Parameter))}\n')
-    f.write('relu\n')
-    f.write(f'fc {net.fc4.in_features} {net.fc4.out_features} {int(isinstance(net.fc4.bias, nn.Parameter))}\n')
+with open('layer_params.bin', 'wb') as f:
+    # conv写入conv in_channels out_channels kernel_size 0/1(bias) 0
+    # relu写入relu 1
+    # pooling写入pooling kernel_size 0/1(max or ave) 2
+    # fc写入fc in_features out_features 0/1(bias) 3
+    f.write(struct.pack('5i', 0, net.conv1.in_channels, net.conv2.out_channels, net.conv1.kernel_size[0], int(isinstance(net.conv1.bias, nn.Parameter))))
+    f.write(struct.pack('i', 1))
+    f.write(struct.pack('3i', 2, net.pool1.kernel_size, 0))
+    f.write(struct.pack('5i', 0, net.conv2.in_channels, net.conv2.out_channels, net.conv2.kernel_size[0], int(isinstance(net.conv2.bias, nn.Parameter))))
+    f.write(struct.pack('i', 1))
+    f.write(struct.pack('3i', 2, net.pool2.kernel_size, 0))
+    f.write(struct.pack('4i', 3, net.fc3.in_features, net.fc3.out_features, int(isinstance(net.fc3.bias, nn.Parameter))))
+    f.write(struct.pack('i', 1))
+    f.write(struct.pack('4i', 3, net.fc4.in_features, net.fc4.out_features, int(isinstance(net.fc4.bias, nn.Parameter))))
 
 # 数据的输入
 TRAIN_BATCH_SIZE = 128

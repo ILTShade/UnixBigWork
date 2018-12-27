@@ -56,6 +56,12 @@ int main(void)
   read(label_file, &buf, sizeof(buf));
   CHECK(TRANS_32(buf), image_num);
 
+  // 进行网络参数的相关读取
+  int model_file = open("./layer_params.bin", O_RDONLY, 0000);
+  if (model_file == -1) return 0;
+  // 由于是从自己生成的文件中读取，那么不需要大小端的转换
+  while (read(model_file, &buf, sizeof(buf))) {
+  }
   // 进行文件数据的读取
   float image_data[image_height * image_width];
   int label_data;
