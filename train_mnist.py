@@ -13,7 +13,9 @@ import numpy as np
 
 # 从命令行解析相关参数，确定是用来做训练还是做转码
 parser = argparse.ArgumentParser()
-parser.add_argument('-m', '--method', default = 'transfer', help = 'method: transfer for transfer zoo/lenet.pth to zoo/layer_data.bin; train for train net and save to zoo/lenet.pth')
+parser.add_argument('-m', '--method', default = 'test', help = 'method: transfer for transfer zoo/lenet.pth to zoo/layer_data.bin;\
+                                                                            train for train net and save to zoo/lenet.pth\
+                                                                            test for test')
 args = parser.parse_args()
 
 # 网络结构的定义，同时将网络结构写入文件中方便读取相关的参数
@@ -165,3 +167,8 @@ if args.method == 'transfer':
             tmp = tmp.tolist()
             # 利用struct方式写入文件，*将元组解析
             f.write(struct.pack(f'{total_length}f', *tuple(tmp)))
+# 这部分用来实现对数据集图片的一个测试
+if args.method == 'test':
+    input_image, input_label = test_dataset[0]
+    print(f'position [0, 26, 12] value is {input_image[0, 26, 12]}')
+    print(f'label is {input_label.item()}')
