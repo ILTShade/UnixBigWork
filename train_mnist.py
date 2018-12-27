@@ -1,10 +1,12 @@
 #-*-coding:utf-8-*-
 import torch
 import torch.nn as nn
-import torchvision
 import torchvision.datasets as Dataset
 import torchvision.transforms as Transform
 from torch.utils.data import DataLoader
+import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
+import time
 
 # 网络结构的定义，同时将网络结构写入文件中方便读取相关的参数
 # 参考了LeNet的设计，但是由于是在mnist数据集上进行测试，所以只有两层卷积+两层全连接
@@ -20,7 +22,7 @@ class LeNet(nn.Module):
         self.fc3 = nn.Linear(in_features = 4*4*50, out_features = 128)
         self.relu3 = nn.ReLU()
         self.fc4 = nn.Linear(in_features = 128, out_features = 10)
-    def forward(x):
+    def forward(self, x):
         x = self.pool1(self.relu1(self.conv1(x)))
         x = self.pool2(self.relu2(self.conv2(x)))
         x = x.view(x.shape[0], -1)
@@ -78,3 +80,63 @@ test_loader = DataLoader(dataset = test_dataset,
                          )
 print(f'训练数据集图片数为 {len(train_dataset)}, iteration数为{len(train_loader)}')
 print(f'测试数据集图片数为 {len(test_dataset)}, iteration数为{len(test_loader)}')
+
+# 网络的训练策略
+BASE_LR = 0.01
+MOMENTUM = 0.9
+WEIGHT_DECAY = 0.0005
+MILESTONES = [10]
+GAMMA = 0.1
+EPOCHS = 20
+
+TRAIN_PARAMETER = \
+'''# 训练的相关参数为
+## loss
+CrossEntropyLoss
+## optimizer
+SGD: base_lr %f momentum %f weight_decay %f
+## lr_policy
+MultiStepLR: milestones [%s] gamma %f epochs %d'''\
+%(
+BASE_LR,
+MOMENTUM,
+WEIGHT_DECAY,
+', '.join(str(e) for e in MILESTONES),
+GAMMA,
+EPOCHS,
+)
+print(TRAIN_PARAMETER)
+# 定义测试网络
+def eval_net(epoch):
+    net.eval()
+    test_correct = 0
+    test_total = 0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            test_total += labels.size(0)
+            # predicted
+            outputs = net(images)
+            _, predicted = torch.max(outputs, 1)
+            test_correct += (predicted == labels).sum().item()
+    print('%s After epoch %d, accuracy is %2.4f' % (time.asctime(time.localtime(time.time())), epoch, test_correct / test_total))
+# 定义训练网络
+# loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr = BASE_LR, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones = MILESTONES, gamma = GAMMA)
+# initial test
+eval_net(0)
+# epochs
+for epoch in range(EPOCHS):
+    # train
+    net.train()
+    scheduler.step()
+    for i, (images, labels) in enumerate(train_loader):
+        net.zero_grad()
+        outputs = net(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        print(f'epoch {epoch+1:3d}, {i:3d}|{len(train_loader):3d}, loss: {loss.item():2.4f}', end = '\r')
+    eval_net(epoch + 1)
+    torch.save(net.state_dict(), f'zoo/lenet.pth')
