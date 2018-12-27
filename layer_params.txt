@@ -1,0 +1,9 @@
+conv 1 20 5 1
+relu
+pooling 2 0
+conv 20 50 5 1
+relu
+pooling 2 0
+fc 800 128 1
+relu
+fc 128 10 1
