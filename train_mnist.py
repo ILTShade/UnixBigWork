@@ -7,6 +7,14 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import time
+import argparse
+import struct
+import numpy as np
+
+# 从命令行解析相关参数，确定是用来做训练还是做转码
+parser = argparse.ArgumentParser()
+parser.add_argument('-m', '--method', default = 'transfer', help = 'method: transfer for transfer zoo/lenet.pth to zoo/layer_data.bin; train for train net and save to zoo/lenet.pth')
+args = parser.parse_args()
 
 # 网络结构的定义，同时将网络结构写入文件中方便读取相关的参数
 # 参考了LeNet的设计，但是由于是在mnist数据集上进行测试，所以只有两层卷积+两层全连接
@@ -120,23 +128,40 @@ def eval_net(epoch):
             test_correct += (predicted == labels).sum().item()
     print('%s After epoch %d, accuracy is %2.4f' % (time.asctime(time.localtime(time.time())), epoch, test_correct / test_total))
 # 定义训练网络
-# loss and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr = BASE_LR, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones = MILESTONES, gamma = GAMMA)
-# initial test
-eval_net(0)
-# epochs
-for epoch in range(EPOCHS):
-    # train
-    net.train()
-    scheduler.step()
-    for i, (images, labels) in enumerate(train_loader):
-        net.zero_grad()
-        outputs = net(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        print(f'epoch {epoch+1:3d}, {i:3d}|{len(train_loader):3d}, loss: {loss.item():2.4f}', end = '\r')
-    eval_net(epoch + 1)
-    torch.save(net.state_dict(), f'zoo/lenet.pth')
+if args.method == 'train':
+    # loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr = BASE_LR, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones = MILESTONES, gamma = GAMMA)
+    # initial test
+    eval_net(0)
+    # epochs
+    for epoch in range(EPOCHS):
+        # train
+        net.train()
+        scheduler.step()
+        for i, (images, labels) in enumerate(train_loader):
+            net.zero_grad()
+            outputs = net(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            print(f'epoch {epoch+1:3d}, {i:3d}|{len(train_loader):3d}, loss: {loss.item():2.4f}', end = '\r')
+        eval_net(epoch + 1)
+        torch.save(net.state_dict(), f'zoo/lenet.pth')
+#  这部分用来实现将params转换为c语言较好读取的格式
+if args.method == 'transfer':
+    net.load_state_dict(torch.load('zoo/lenet.pth'))
+    # 测试精度
+    eval_net(0)
+    # 将参数写入到文件中去
+    with open('zoo/layer_data.bin', 'wb') as f:
+        for param in net.parameters():
+            print(param.shape)
+            # 先转成np矩阵，再按照C格式reshape，再转成list
+            tmp = param.detach().numpy()
+            total_length = tmp.size
+            tmp = np.reshape(tmp, (total_length), order='C')
+            tmp = tmp.tolist()
+            # 利用struct方式写入文件，*将元组解析
+            f.write(struct.pack(f'{total_length}f', *tuple(tmp)))
