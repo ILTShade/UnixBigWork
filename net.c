@@ -272,6 +272,8 @@ int main(void)
   CHECK(TRANS_32(buf), image_num);
 
   // 对所有的图片进行遍历
+  int test_total = 0;
+  int correct_total = 0;
   for (int i = 0; i < image_num; i++) {
     // 进行文件数据的读取
     float *image_data = (float *)malloc(image_height * image_width * sizeof(float));
@@ -310,12 +312,17 @@ int main(void)
         max_index = k;
       }
     }
-    printf("predict label is %d\n", max_index);
+    // 计算每张图片分类是否准确
+    if (max_index == label_data) correct_total++;
+    test_total++;
+    // 每100张给出一个测试结果
+    if ((i + 1) % 100 == 0) {
+      printf("%d/%d\n", correct_total, test_total);
+    }
+    // 关闭文件
     close(model_file);
     close(weights_file);
-    break;
   }
-
   // 关闭文件
   close(image_file);
   close(label_file);
