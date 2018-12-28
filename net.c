@@ -57,7 +57,6 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   float *bias_data = (float *)malloc(bias_len * sizeof(float));
   if (bias_flag) {
     CHECK(read(weights_file, bias_data, bias_len * sizeof(float)), bias_len * sizeof(float));
-    printf("%f %f\n",bias_data[0], bias_data[1]);
   }
   else {
     for (int i = 0; i < bias_len; i++) {
@@ -75,19 +74,25 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   int weights_batch_shift = in_channels * kernel_size * kernel_size;
   int weights_channel_shift = kernel_size * kernel_size;
   int weights_height_shift = kernel_size;
+  float tmp_sum1, tmp_sum2;
   for (int out_c = 0; out_c < out_channels; out_c++) {
     for (int out_h = 0; out_h < out_height; out_h++) {
       for (int out_w = 0; out_w < out_width; out_w++) {
          // 根据bias赋初值
          *out_data = bias_data[out_c];
+         // 为了减少float计算的误差，引入了部分和计算，增加了中间变量
          // 按照卷积核计算最终的结果
          for (int in_c = 0; in_c < in_channels; in_c++) {
+           tmp_sum1 = 0.f;
            for (int in_h = 0; in_h < kernel_size; in_h++) {
+             tmp_sum2 = 0.f;
              for (int in_w = 0; in_w < kernel_size; in_w++) {
-               *out_data += (tensor->data[in_c * data_channel_shift + (out_h + in_h) * data_height_shift + (out_w + in_w)] * \
-                             weights_data[out_c * weights_batch_shift + in_c * weights_channel_shift + in_h * weights_height_shift + in_w]);
+               tmp_sum2 += (tensor->data[in_c * data_channel_shift + (out_h + in_h) * data_height_shift + (out_w + in_w)] * \
+                            weights_data[out_c * weights_batch_shift + in_c * weights_channel_shift + in_h * weights_height_shift + in_w]);
              } // for (int in_w = 0; in_w < kernel_size; in_w++)
+             tmp_sum1 += tmp_sum2;
            } // for (int in_h = 0; in_h < kernel_size; in_h++)
+           *out_data += tmp_sum1;
          } // for (int in_c = 0; in_c < in_channels; in_c++)
          out_data++; // next value
       } // for (int out_w = 0; out_w < out_width; out_w++)
