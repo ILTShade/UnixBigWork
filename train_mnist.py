@@ -51,7 +51,7 @@ with open('layer_params.bin', 'wb') as f:
     # relu写入relu 1
     # pooling写入pooling kernel_size 0/1(max or ave) 2
     # fc写入fc in_features out_features 0/1(bias) 3
-    f.write(struct.pack('5i', 0, net.conv1.in_channels, net.conv2.out_channels, net.conv1.kernel_size[0], int(isinstance(net.conv1.bias, nn.Parameter))))
+    f.write(struct.pack('5i', 0, net.conv1.in_channels, net.conv1.out_channels, net.conv1.kernel_size[0], int(isinstance(net.conv1.bias, nn.Parameter))))
     f.write(struct.pack('i', 1))
     f.write(struct.pack('3i', 2, net.pool1.kernel_size, 0))
     f.write(struct.pack('5i', 0, net.conv2.in_channels, net.conv2.out_channels, net.conv2.kernel_size[0], int(isinstance(net.conv2.bias, nn.Parameter))))
@@ -172,3 +172,16 @@ if args.method == 'test':
     input_image, input_label = test_dataset[0]
     print(f'position [0, 26, 12] value is {input_image[0, 26, 12]}')
     print(f'label is {input_label.item()}')
+    # 增加对卷积层的测试
+    net.load_state_dict(torch.load('zoo/lenet.pth'))
+    eval_net(0)
+    input_image = torch.unsqueeze(input_image, 0);
+    a = input_image[0, 0, 22:27, 12:17].numpy()
+    b = net.conv1.weight[1].detach().numpy()
+    c = net.conv1.bias[1].detach().numpy()
+    print(a)
+    print(b)
+    print(c)
+    print(np.sum(a * b) + c)
+    conv_result = net.conv1(input_image)
+    print(f'position [1, 22, 12] value is {conv_result[0, 1, 22, 12]}')
