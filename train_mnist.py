@@ -185,3 +185,5 @@ if args.method == 'test':
     print(np.sum(a * b) + c)
     conv_result = net.conv1(input_image)
     print(f'position [1, 22, 12] value is {conv_result[0, 1, 22, 12]}')
+    # 增加对输出层的测试
+    print(net(input_image))

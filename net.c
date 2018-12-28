@@ -193,6 +193,55 @@ int pooling_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   // 返回值
   return 0;
 }
+// 对Tensor按照指定的格式进行FC运算
+int fc_tensor(int model_file, int weights_file, struct Tensor *tensor) {
+  // fc的参数为in_features, out_features, bias_flag
+  uint32_t in_features, out_features, bias_flag;
+  read(model_file, &in_features, sizeof(in_features));
+  read(model_file, &out_features, sizeof(out_features));
+  read(model_file, &bias_flag, sizeof(bias_flag));
+  // 输出全连接层层网络的参数作为调试信息
+  printf("fc in_features %d, out_features %d, bias_flag %d\n", in_features, out_features, bias_flag);
+  // 测试相关的输入尺寸是否正确
+  CHECK(tensor->channel * tensor->height * tensor->width, in_features);
+  // 进行weights信息的读取
+  uint32_t weights_len = in_features * out_features;
+  float *weights_data = (float *)malloc(weights_len * sizeof(float));
+  CHECK(read(weights_file, weights_data, weights_len * sizeof(float)), weights_len * sizeof(float));
+  // 进行bias信息的读取，如果bias不存在，那么将所有的值设为0
+  uint32_t bias_len = out_features;
+  float *bias_data = (float *)malloc(bias_len * sizeof(float));
+  if (bias_flag) {
+    CHECK(read(weights_file, bias_data, bias_len * sizeof(float)), bias_len * sizeof(float));
+  }
+  else {
+    for (int i = 0; i < bias_len; i++) {
+      *(bias_data + i) = 0.f;
+    }
+  }
+  // 先计算输出数据的长度，申请地址空间
+  uint32_t out_len = out_features;
+  float *out_data = (float *)malloc(out_len * sizeof(float));
+  // 只支持向量矩阵乘
+  for (int out_f = 0; out_f < out_features; out_f++) {
+    *out_data = bias_data[out_f];
+    for (int in_f = 0; in_f < in_features; in_f++) {
+      (*out_data) += weights_data[out_f * in_features + in_f] * tensor->data[in_f];
+    }
+    out_data++;
+  }
+  // 计算完成后，对tensor内容进行修改
+  tensor->channel = out_features;
+  tensor->height = 1;
+  tensor->width = 1;
+  free(tensor->data);
+  tensor->data = out_data - out_features;
+  // 消除计算的中间过程中存储的变量
+  free(weights_data);
+  free(bias_data);
+  // 返回值
+  return 0;
+}
 
 int main(void)
 {
@@ -240,18 +289,26 @@ int main(void)
     tensor.data = image_data;
     // 由于是从自己生成的文件中读取，那么不需要大小端的转换
     while (read(model_file, &buf, sizeof(buf))) {
-      printf("%d\n", buf);
       switch (buf) {
         case 0: conv_tensor(model_file, weights_file, &tensor); break;
         case 1: relu_tensor(model_file, weights_file, &tensor); break;
         case 2: pooling_tensor(model_file, weights_file, &tensor); break;
-      }
-      if (buf == 2) {
-      printf("%d %d %d\n", tensor.channel, tensor.height, tensor.width);
-      printf("%.10f\n", *(tensor.data + 1 * tensor.height * tensor.width + 11* tensor.width + 6));
-      break;
+        case 3: fc_tensor(model_file, weights_file, &tensor); break;
+        default: printf("something error happened\n"); break;
       }
     }
+    // 计算得出所有结果后，显示出来
+    printf("%d\n", tensor.channel);
+    printf("%f\n", tensor.data[0]);
+    printf("%f\n", tensor.data[1]);
+    printf("%f\n", tensor.data[2]);
+    printf("%f\n", tensor.data[3]);
+    printf("%f\n", tensor.data[4]);
+    printf("%f\n", tensor.data[5]);
+    printf("%f\n", tensor.data[6]);
+    printf("%f\n", tensor.data[7]);
+    printf("%f\n", tensor.data[8]);
+    printf("%f\n", tensor.data[9]);
     close(model_file);
     close(weights_file);
     break;
