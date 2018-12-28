@@ -297,18 +297,18 @@ int main(void)
         default: printf("something error happened\n"); break;
       }
     }
-    // 计算得出所有结果后，显示出来
-    printf("%d\n", tensor.channel);
-    printf("%f\n", tensor.data[0]);
-    printf("%f\n", tensor.data[1]);
-    printf("%f\n", tensor.data[2]);
-    printf("%f\n", tensor.data[3]);
-    printf("%f\n", tensor.data[4]);
-    printf("%f\n", tensor.data[5]);
-    printf("%f\n", tensor.data[6]);
-    printf("%f\n", tensor.data[7]);
-    printf("%f\n", tensor.data[8]);
-    printf("%f\n", tensor.data[9]);
+    // 对于输出的结果，找到最大值，进而给出预测的结果，作出对height和长度的判断
+    CHECK(tensor.height, 1);
+    CHECK(tensor.width, 1);
+    float max_value = tensor.data[0];
+    int max_index = 0;
+    for (int k = 1; k < tensor.channel; k++) {
+      if (tensor.data[k] > max_value) {
+        max_value = tensor.data[k];
+        max_index = k;
+      }
+    }
+    printf("predict label is %d\n", max_index);
     close(model_file);
     close(weights_file);
     break;
