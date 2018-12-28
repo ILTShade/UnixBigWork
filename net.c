@@ -47,7 +47,7 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   read(model_file, &kernel_size, sizeof(kernel_size));
   read(model_file, &bias_flag, sizeof(bias_flag));
   // 输出卷积层网络的参数作为调试信息
-  printf("in_channels %d, out_channels %d, kernel_size %d, bias_flag %d\n", in_channels, out_channels, kernel_size, bias_flag);
+  printf("conv in_channels %d, out_channels %d, kernel_size %d, bias_flag %d\n", in_channels, out_channels, kernel_size, bias_flag);
   // 进行weights信息的读取
   uint32_t weights_len = in_channels * out_channels * kernel_size * kernel_size;
   float *weights_data = (float *)malloc(weights_len * sizeof(float));
@@ -110,6 +110,89 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   // 返回值
   return 0;
 }
+// 对Tensor按照指定的格式进行ReLU运算
+int relu_tensor(int model_file, int weights_file, struct Tensor *tensor) {
+  // ReLU运算不需要任何额外的操作，只需要将小于0的置为0即可
+  printf("relu\n");
+  float *data = tensor->data;
+  for (int c = 0; c < tensor->channel; c++) {
+    for (int h = 0; h < tensor->height; h++) {
+      for (int w = 0; w < tensor->width; w++) {
+        *data = *data > 0 ? *data : 0;
+        data++;
+      } // for (int w = 0; w < tensor->width; w++)
+    } // for (int h = 0; h < tensor->height; h++)
+  } // for (int c = 0; c < tensor->channel; c++)
+  return 0;
+}
+// 对Tensor按照指定的格式进行Pooling运算
+int pooling_tensor(int model_file, int weights_file, struct Tensor *tensor) {
+  // Pooling运算只支持kernel_size方形操作，且要求边长能够整除
+  uint32_t kernel_size;
+  uint32_t pooling_method;
+  // 输出相关参数作为调试信息
+  read(model_file, &kernel_size, sizeof(kernel_size));
+  read(model_file, &pooling_method, sizeof(pooling_method));
+  printf("pooling kernel_size %d, pooling method %d\n", kernel_size, pooling_method);
+  // 对于pooling不需要参数，但是要更新tensor的相关参数，同时check相关参数的正确性
+  CHECK(tensor->height % kernel_size, 0);
+  CHECK(tensor->width % kernel_size, 0);
+  // 申请新的数据空间
+  uint32_t out_height = tensor->height / kernel_size;
+  uint32_t out_width = tensor->width / kernel_size;
+  float *out_data = (float *)malloc(tensor->channel * out_height * out_width * sizeof(float));
+  // channel height shift
+  uint32_t data_channel_shift = tensor->height * tensor->width;
+  uint32_t data_height_shift = tensor->width;
+  // 在不同的method下选择不同的分支进行计算
+  if (pooling_method == 0) {
+    // 0 mean MAXPOOL
+    for (int out_c = 0; out_c < tensor->channel; out_c++) {
+      for (int out_h = 0; out_h < out_height; out_h++) {
+        for (int out_w = 0; out_w < out_width; out_w++) {
+          // 按照最大值的方式查找，初始最大值为第一个值
+          float max_value = tensor->data[out_c * data_channel_shift + out_h * kernel_size * data_height_shift + out_w * kernel_size];
+          float tmp_value;
+          for (int in_h = out_h * kernel_size; in_h < (out_h + 1) * kernel_size; in_h++) {
+            for (int in_w = out_w * kernel_size; in_w < (out_w + 1) * kernel_size; in_w++) {
+              tmp_value = tensor->data[out_c * data_channel_shift + in_h * data_height_shift + in_w];
+              max_value = tmp_value > max_value ? tmp_value : max_value;
+            }
+          }
+          // 找到最大值后赋给当前的data
+          *out_data = max_value;
+          out_data++;
+        }
+      }
+    } // for (int out_c = 0; out_c < tensor->channel; out_c++)
+  }
+  if (pooling_method == 1) {
+    // 0 mean AVGPOOL
+    for (int out_c = 0; out_c < tensor->channel; out_c++) {
+      for (int out_h = 0; out_h < out_height; out_h++) {
+        for (int out_w = 0; out_w < out_width; out_w++) {
+          // 按照最大值的方式查找，初始最大值为第一个值
+          float tmp_value = 0;
+          for (int in_h = out_h * kernel_size; in_h < (out_h + 1) * kernel_size; in_h++) {
+            for (int in_w = out_w * kernel_size; in_w < (out_w + 1) * kernel_size; in_w++) {
+              tmp_value += tensor->data[out_c * data_channel_shift + in_h * data_height_shift + in_w];
+            }
+          }
+          // 找到最大值后赋给当前的data
+          *out_data = tmp_value / (kernel_size * kernel_size);
+          out_data++;
+        }
+      }
+    } // for (int out_c = 0; out_c < tensor->channel; out_c++)
+  }
+  // 赋值完成后实现对一些数据的处理
+  tensor->height = out_height;
+  tensor->width = out_width;
+  free(tensor->data);
+  tensor->data = out_data - tensor->channel * out_height * out_width;
+  // 返回值
+  return 0;
+}
 
 int main(void)
 {
@@ -157,10 +240,17 @@ int main(void)
     tensor.data = image_data;
     // 由于是从自己生成的文件中读取，那么不需要大小端的转换
     while (read(model_file, &buf, sizeof(buf))) {
-      if (buf == 0) conv_tensor(model_file, weights_file, &tensor);
+      printf("%d\n", buf);
+      switch (buf) {
+        case 0: conv_tensor(model_file, weights_file, &tensor); break;
+        case 1: relu_tensor(model_file, weights_file, &tensor); break;
+        case 2: pooling_tensor(model_file, weights_file, &tensor); break;
+      }
+      if (buf == 2) {
       printf("%d %d %d\n", tensor.channel, tensor.height, tensor.width);
-      printf("%.10f\n", *(tensor.data + 1 * tensor.height * tensor.width + 22 * tensor.width + 12));
+      printf("%.10f\n", *(tensor.data + 1 * tensor.height * tensor.width + 11* tensor.width + 6));
       break;
+      }
     }
     close(model_file);
     close(weights_file);
