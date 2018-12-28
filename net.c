@@ -2,14 +2,18 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#define __DEBUG__ 0
+
+// 对于在某些情况下才输出DEBUG信息
+#define DEBUG_OUT(x) if (__DEBUG__) x;
 
 // 由于本机是intel处理器，所以需要进行大小端的转换
 #define TRANS_32(x) \
-    (uint32_t)((((uint32_t)(x) & 0xff000000) >> 24) | \
-               (((uint32_t)(x) & 0x00ff0000) >> 8) | \
-               (((uint32_t)(x) & 0x0000ff00) << 8) | \
-               (((uint32_t)(x) & 0x000000ff) << 24) \
-               )
+    ((uint32_t)((((uint32_t)(x) & 0xff000000) >> 24) | \
+                (((uint32_t)(x) & 0x00ff0000) >> 8)  | \
+                (((uint32_t)(x) & 0x0000ff00) << 8)  | \
+                (((uint32_t)(x) & 0x000000ff) << 24)   \
+                ))
 // 用来做CHECK的函数
 #define CHECK(A, B) if ((A) != (B)) {printf("something error happen\n"); return -1;}
 // 一些需要需先设定的参数
@@ -47,7 +51,7 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   read(model_file, &kernel_size, sizeof(kernel_size));
   read(model_file, &bias_flag, sizeof(bias_flag));
   // 输出卷积层网络的参数作为调试信息
-  printf("conv in_channels %d, out_channels %d, kernel_size %d, bias_flag %d\n", in_channels, out_channels, kernel_size, bias_flag);
+  DEBUG_OUT(printf("conv in_channels %d, out_channels %d, kernel_size %d, bias_flag %d\n", in_channels, out_channels, kernel_size, bias_flag));
   // 进行weights信息的读取
   uint32_t weights_len = in_channels * out_channels * kernel_size * kernel_size;
   float *weights_data = (float *)malloc(weights_len * sizeof(float));
@@ -113,7 +117,7 @@ int conv_tensor(int model_file, int weights_file, struct Tensor *tensor) {
 // 对Tensor按照指定的格式进行ReLU运算
 int relu_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   // ReLU运算不需要任何额外的操作，只需要将小于0的置为0即可
-  printf("relu\n");
+  DEBUG_OUT(printf("relu\n"));
   float *data = tensor->data;
   for (int c = 0; c < tensor->channel; c++) {
     for (int h = 0; h < tensor->height; h++) {
@@ -133,7 +137,7 @@ int pooling_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   // 输出相关参数作为调试信息
   read(model_file, &kernel_size, sizeof(kernel_size));
   read(model_file, &pooling_method, sizeof(pooling_method));
-  printf("pooling kernel_size %d, pooling method %d\n", kernel_size, pooling_method);
+  DEBUG_OUT(printf("pooling kernel_size %d, pooling method %d\n", kernel_size, pooling_method));
   // 对于pooling不需要参数，但是要更新tensor的相关参数，同时check相关参数的正确性
   CHECK(tensor->height % kernel_size, 0);
   CHECK(tensor->width % kernel_size, 0);
@@ -201,7 +205,7 @@ int fc_tensor(int model_file, int weights_file, struct Tensor *tensor) {
   read(model_file, &out_features, sizeof(out_features));
   read(model_file, &bias_flag, sizeof(bias_flag));
   // 输出全连接层层网络的参数作为调试信息
-  printf("fc in_features %d, out_features %d, bias_flag %d\n", in_features, out_features, bias_flag);
+  DEBUG_OUT(printf("fc in_features %d, out_features %d, bias_flag %d\n", in_features, out_features, bias_flag));
   // 测试相关的输入尺寸是否正确
   CHECK(tensor->channel * tensor->height * tensor->width, in_features);
   // 进行weights信息的读取
@@ -273,8 +277,6 @@ int main(void)
     float *image_data = (float *)malloc(image_height * image_width * sizeof(float));
     int label_data;
     read_image_label(image_file, label_file, image_data, &label_data);
-    printf("position [0, 26, 12] value is %.10f\n", image_data[26 * image_width + 12]);
-    printf("label is %d\n", label_data);
     // 进行网络参数的相关读取
     int model_file = open("./layer_params.bin", O_RDONLY, 0000);
     if (model_file == -1) return 0;
