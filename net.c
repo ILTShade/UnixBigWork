@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -291,6 +292,18 @@ int main(void)
     tensor.height = image_height;
     tensor.width = image_width;
     tensor.data = image_data;
+    // 每隔1000张图片对图片进行一次测试
+    if ((i + 1) % 1000 == 0) {
+      float *tmp_data = tensor.data;
+      for (int s = 0; s < tensor.height; s++) {
+        for (int t = 0; t < tensor.width; t++) {
+          if (*tmp_data > 0.5f) printf("*");
+          else printf(" ");
+          tmp_data++;
+        }
+        printf("\n");
+      }
+    }
     // 由于是从自己生成的文件中读取，那么不需要大小端的转换
     while (read(model_file, &buf, sizeof(buf))) {
       switch (buf) {
@@ -315,8 +328,9 @@ int main(void)
     // 计算每张图片分类是否准确
     if (max_index == label_data) correct_total++;
     test_total++;
-    // 每100张给出一个测试结果
-    if ((i + 1) % 100 == 0) {
+    // 每1000张给出一个测试结果
+    if ((i + 1) % 1000 == 0) {
+      printf("本张图片的预测类别为%d\n", max_index);
       printf("%d/%d\n", correct_total, test_total);
     }
     // 关闭文件

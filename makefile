@@ -5,7 +5,7 @@ PROJECT_NAME := net
 # c
 Q := @
 CC = clang
-CFLAGS = -Wall -Werror -g -DDEBUG -O0
+CFLAGS = -Wall -Werror -g -DDEBUG -O3
 
 .PHONY: all
 all: $(PROJECT_NAME)
