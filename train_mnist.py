@@ -10,12 +10,14 @@ import time
 import argparse
 import struct
 import numpy as np
+from tensorboardX import SummaryWriter
+global tensorboard_writer
 
 # 从命令行解析相关参数，确定是用来做训练还是做转码
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--method', default = 'test', help = 'method: transfer for transfer zoo/lenet.pth to zoo/layer_data.bin;\
-                                                                            train for train net and save to zoo/lenet.pth\
-                                                                            test for test')
+                                                                        train for train net and save to zoo/lenet.pth\
+                                                                        test for test')
 args = parser.parse_args()
 
 # 网络结构的定义，同时将网络结构写入文件中方便读取相关的参数
@@ -116,21 +118,31 @@ GAMMA,
 EPOCHS,
 )
 print(TRAIN_PARAMETER)
+device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 # 定义测试网络
 def eval_net(epoch):
+    net.to(device)
     net.eval()
     test_correct = 0
     test_total = 0
     with torch.no_grad():
         for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
             test_total += labels.size(0)
             # predicted
             outputs = net(images)
             _, predicted = torch.max(outputs, 1)
             test_correct += (predicted == labels).sum().item()
     print('%s After epoch %d, accuracy is %2.4f' % (time.asctime(time.localtime(time.time())), epoch, test_correct / test_total))
+    tensorboard_writer.add_scalars('test_acc', {'test_acc': test_correct / test_total}, epoch)
+
 # 定义训练网络
 if args.method == 'train':
+    global tensorboard_writer
+    tensorboard_writer = SummaryWriter(comment = 'TRAIN')
+    # set net on gpu
+    net.to(device)
     # loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr = BASE_LR, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)
@@ -143,12 +155,15 @@ if args.method == 'train':
         net.train()
         scheduler.step()
         for i, (images, labels) in enumerate(train_loader):
+            images = images.to(device)
+            labels = labels.to(device)
             net.zero_grad()
             outputs = net(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
             print(f'epoch {epoch+1:3d}, {i:3d}|{len(train_loader):3d}, loss: {loss.item():2.4f}', end = '\r')
+            tensorboard_writer.add_scalars('train_loss', {'train_loss': loss.item()}, epoch * len(train_loader) + i)
         eval_net(epoch + 1)
         torch.save(net.state_dict(), f'zoo/lenet.pth')
 #  这部分用来实现将params转换为c语言较好读取的格式
@@ -174,7 +189,6 @@ if args.method == 'test':
     print(f'label is {input_label.item()}')
     # 增加对卷积层的测试
     net.load_state_dict(torch.load('zoo/lenet.pth'))
-    eval_net(0)
     input_image = torch.unsqueeze(input_image, 0);
     a = input_image[0, 0, 22:27, 12:17].numpy()
     b = net.conv1.weight[1].detach().numpy()
